@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Air Hockey</title>
+    <!-- Favicon icon using data URI for air hockey icon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2245%22 fill=%22%23ff0055%22/><circle cx=%2250%22 cy=%2250%22 r=%2225%22 fill=%22%23ffcc00%22/></svg>">
+    <!-- Include PeerJS for online multiplayer -->
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+            margin: 0;
+            padding: 0;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #0d0f18;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #fff;
+        }
+        #game-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        canvas {
+            background: #ffffff;
+            box-shadow: 0 0 30px rgba(0, 243, 255, 0.4);
+            border-radius: 12px;
+            display: block;
+        }
+        /* Top Scoreboard Container */
+        #scoreboard {
+            position: absolute;
+            top: 15px;
+            width: 100%;
+            max-width: 420px;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 20px;
+            z-index: 5;
+            pointer-events: none;
+        }
+        .score-box {
+            background: rgba(26, 29, 46, 0.85);
+            border: 2px solid #00f3ff;
+            border-radius: 12px;
+            padding: 6px 16px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            box-shadow: 0 0 10px rgba(0, 243, 255, 0.4);
+            letter-spacing: 1px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .score-box.top-score {
+            border-color: #ff0055;
+            box-shadow: 0 0 10px rgba(255, 0, 85, 0.4);
+            color: #ff0055;
+        }
+        .score-box.bottom-score {
+            border-color: #00f3ff;
+            color: #00f3ff;
+        }
+        .score-box .name-label {
+            font-size: 0.75rem;
+            opacity: 0.8;
+            text-transform: uppercase;
+            margin-bottom: 2px;
+            max-width: 100px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .score-box .points {
+            font-size: 1.4rem;
+        }
+
+        /* UI Screens */
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(13, 15, 24, 0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            padding: 20px;
+            text-align: center;
+            overflow-y: auto;
+        }
+        .screen.hidden {
+            display: none !important;
+        }
+        h1 {
+            font-size: 2.3rem;
+            margin-bottom: 15px;
+            background: linear-gradient(45deg, #ff007f, #00f3ff, #ffbb00);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 20px rgba(255, 0, 127, 0.5);
+            letter-spacing: 2px;
+        }
+        .btn {
+            background: linear-gradient(135deg, #00f3ff, #0066ff);
+            color: white;
+            border: none;
+            padding: 14px 28px;
+            margin: 8px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.5);
+            transition: all 0.2s ease;
+            width: 240px;
+            max-width: 80%;
+        }
+        .btn:active {
+            transform: scale(0.95);
+            box-shadow: 0 0 5px rgba(0, 243, 255, 0.8);
+        }
+        .btn-secondary {
+            background: linear-gradient(135deg, #ff007f, #ff6600);
+            box-shadow: 0 0 15px rgba(255, 0, 127, 0.5);
+        }
+        .btn-green {
+            background: linear-gradient(135deg, #00ff66, #009933);
+            box-shadow: 0 0 15px rgba(0, 255, 102, 0.5);
+        }
+        .input-group {
+            margin: 8px 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .input-group label {
+            font-size: 0.85rem;
+            color: #a0a6cd;
+            margin-bottom: 4px;
+        }
+        input[type="text"] {
+            padding: 10px 18px;
+            font-size: 1rem;
+            border-radius: 20px;
+            border: 2px solid #00f3ff;
+            background: #1a1d2e;
+            color: white;
+            width: 240px;
+            text-align: center;
+            outline: none;
+        }
+        p {
+            margin: 8px 0;
+            color: #a0a6cd;
+            font-size: 0.95rem;
+        }
+        #status-msg {
+            color: #ffbb00;
+            font-weight: bold;
+            min-height: 24px;
+            margin: 8px 0;
+        }
+        #code-display {
+            background: #232842;
+            padding: 8px 16px;
+            border-radius: 10px;
+            font-family: monospace;
+            font-size: 1.2rem;
+            color: #00f3ff;
+            letter-spacing: 2px;
+            margin: 8px 0;
+            border: 1px dashed #00f3ff;
+        }
+        .back-btn {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: transparent;
+            border: 2px solid #a0a6cd;
+            color: #a0a6cd;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        /* Winner Banner Overlay */
+        #winner-banner {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            background: rgba(13, 15, 24, 0.95);
+            border: 4px solid #ffbb00;
+            padding: 30px 40px;
+            border-radius: 20px;
+            text-align: center;
+            z-index: 20;
+            box-shadow: 0 0 50px rgba(255, 187, 0, 0.8);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        #winner-banner.show {
+            transform: translate(-50%, -50%) scale(1);
+        }
+        #winner-banner h2 {
+            font-size: 2.2rem;
+            color: #ffbb00;
+            margin-bottom: 20px;
+            text-shadow: 0 0 15px rgba(255, 187, 0, 0.6);
+        }
+
+        /* Flashing animation class for canvas/table lights */
+        @keyframes flashLights {
+            0% { box-shadow: 0 0 30px rgba(255, 0, 127, 0.9), inset 0 0 20px rgba(255, 255, 0, 0.5); }
+            33% { box-shadow: 0 0 50px rgba(0, 243, 255, 0.9), inset 0 0 30px rgba(255, 0, 127, 0.7); }
+            66% { box-shadow: 0 0 50px rgba(255, 187, 0, 0.9), inset 0 0 30px rgba(0, 243, 255, 0.7); }
+            100% { box-shadow: 0 0 30px rgba(255, 0, 127, 0.9), inset 0 0 20px rgba(255, 255, 0, 0.5); }
+        }
+        .flashing {
+            animation: flashLights 0.5s infinite alternate;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <!-- TOP SCOREBOARD -->
+        <div id="scoreboard" class="hidden">
+            <div id="score-top-box" class="score-box top-score">
+                <span id="name-top-display" class="name-label">AI</span>
+                <span id="score-top-display" class="points">0</span>
+            </div>
+            <div id="score-bottom-box" class="score-box bottom-score">
+                <span id="name-bottom-display" class="name-label">Player 1</span>
+                <span id="score-bottom-display" class="points">0</span>
+            </div>
+        </div>
+
+        <!-- SPLASH SCREEN -->
+        <div id="splash-screen" class="screen">
+            <h1>NEON AIR HOCKEY</h1>
+            <div class="input-group">
+                <label for="p1-name-input">Your Name (Player 1 / Bottom)</label>
+                <input type="text" id="p1-name-input" value="Player 1" maxlength="12">
+            </div>
+            <div class="input-group">
+                <label for="p2-name-input">Opponent Name (Player 2 / AI)</label>
+                <input type="text" id="p2-name-input" value="AI" maxlength="12">
+            </div>
+            <p style="margin-top: 10px;">Select Game Mode</p>
+            <button class="btn" onclick="initAudioAndStart('1p')">1 Player (vs AI)</button>
+            <button class="btn btn-secondary" onclick="initAudioAndStart('2p')">2 Players (Local)</button>
+            <button class="btn btn-green" onclick="initAudioAndStart('online')">Online (PeerJS)</button>
+        </div>
+
+        <!-- ONLINE MENU SCREEN -->
+        <div id="online-screen" class="screen hidden">
+            <button class="back-btn" onclick="backToSplash()">Back</button>
+            <h1>ONLINE MULTIPLAYER</h1>
+            <div id="online-actions">
+                <button class="btn btn-green" onclick="hostGame()">Create Room</button>
+                <div style="margin: 15px 0; color: #a0a6cd;">- OR -</div>
+                <input type="text" id="join-code-input" placeholder="Enter Friend's Code">
+                <button class="btn" onclick="joinGame()">Join Room</button>
+            </div>
+            <div id="hosting-section" class="hidden">
+                <p>Your Room Code:</p>
+                <div id="code-display">Generating...</div>
+                <p>Waiting for opponent to connect...</p>
+            </div>
+            <div id="status-msg"></div>
+        </div>
+
+        <!-- WINNER BANNER OVERLAY -->
+        <div id="winner-banner">
+            <h2 id="winner-text">PLAYER 1 WINS!</h2>
+            <button class="btn btn-green" onclick="playAgain()">Play Again</button>
+            <button class="btn btn-secondary" onclick="backToSplash()">Main Menu</button>
+        </div>
+
+        <!-- GAME CANVAS -->
+        <canvas id="hockeyCanvas"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('hockeyCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Screens & UI Elements
+        const splashScreen = document.getElementById('splash-screen');
+        const onlineScreen = document.getElementById('online-screen');
+        const hostingSection = document.getElementById('hosting-section');
+        const onlineActions = document.getElementById('online-actions');
+        const codeDisplay = document.getElementById('code-display');
+        const joinCodeInput = document.getElementById('join-code-input');
+        const statusMsg = document.getElementById('status-msg');
+        const scoreboard = document.getElementById('scoreboard');
+        const scoreTopDisplay = document.getElementById('score-top-display');
+        const scoreBottomDisplay = document.getElementById('score-bottom-display');
+        const nameTopDisplay = document.getElementById('name-top-display');
+        const nameBottomDisplay = document.getElementById('name-bottom-display');
+        const p1NameInput = document.getElementById('p1-name-input');
+        const p2NameInput = document.getElementById('p2-name-input');
+        const winnerBanner = document.getElementById('winner-banner');
+        const winnerText = document.getElementById('winner-text');
+
+        let gameMode = null; // '1p', '2p', 'online-host', 'online-client'
+        let peer = null;
+        let conn = null;
+        let myRole = 'host'; 
+        let gameOver = false;
+
+        let player1Name = 'Player 1';
+        let player2Name = 'AI';
+
+        // AI anti-glitch / spam tracking
+        let aiHitTimestamps = [];
+
+        // Web Audio API Context & Sound effects
+        let audioCtx = null;
+        let fanfareInterval = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function initAudioAndStart(mode) {
+            initAudio();
+            player1Name = p1NameInput.value.trim() || 'Player 1';
+            player2Name = p2NameInput.value.trim() || (mode === '1p' ? 'AI' : 'Player 2');
+
+            if (mode === 'online') {
+                showOnlineMenu();
+            } else {
+                startGameMode(mode);
+            }
+        }
+
+        // Play tap / hit sound when paddle strikes the puck or wall
+        function playTapSound(frequency = 400, type = 'sine', duration = 0.05, vol = 0.3) {
+            if (!audioCtx) return;
+            try {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(frequency, audioCtx.currentTime);
+                
+                gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                osc.start();
+                osc.stop(audioCtx.currentTime + duration);
+            } catch(e) {}
+        }
+
+        // Play victory fanfare music sequence
+        function playFanfare() {
+            if (!audioCtx) return;
+            if (fanfareInterval) clearInterval(fanfareInterval);
+
+            const notes = [523.25, 659.25, 783.99, 1046.50, 783.99, 1046.50]; // C5, E5, G5, C6, G5, C6
+            let index = 0;
+
+            try {
+                fanfareInterval = setInterval(() => {
+                    if (index >= notes.length) {
+                        clearInterval(fanfareInterval);
+                        return;
+                    }
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(notes[index], audioCtx.currentTime);
+
+                    gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.3);
+                    index++;
+                }, 200);
+            } catch(e) {}
+        }
+
+        // Game dimensions
+        let tableWidth = 400;
+        let tableHeight = 650;
+        let scale = 1;
+
+        // Scores
+        let scoreTop = 0;
+        let scoreBottom = 0;
+
+        // Game entities
+        const puck = {
+            x: 0, y: 0,
+            vx: 0, vy: 0,
+            radius: 18,
+            maxSpeed: 22,
+            friction: 0.992
+        };
+
+        const paddleTop = {
+            x: 0, y: 0,
+            targetX: 0, targetY: 0,
+            lastX: 0, lastY: 0,
+            vx: 0, vy: 0,
+            radius: 32,
+            color: '#ff0055'
+        };
+
+        const paddleBottom = {
+            x: 0, y: 0,
+            targetX: 0, targetY: 0,
+            lastX: 0, lastY: 0,
+            vx: 0, vy: 0,
+            radius: 32,
+            color: '#ff0055'
+        };
+
+        let touchMap = {};
+
+        function resizeCanvas() {
+            const maxWidth = window.innerWidth * 0.95;
+            const maxHeight = window.innerHeight * 0.92;
+            
+            const aspect = 400 / 650;
+            
+            if (maxWidth / maxHeight > aspect) {
+                tableHeight = maxHeight;
+                tableWidth = tableHeight * aspect;
+            } else {
+                tableWidth = maxWidth;
+                tableHeight = tableWidth / aspect;
+            }
+
+            canvas.width = tableWidth;
+            canvas.height = tableHeight;
+            scale = tableWidth / 400;
+
+            puck.radius = 18 * scale;
+            paddleTop.radius = 32 * scale;
+            paddleBottom.radius = 32 * scale;
+
+            resetPositions();
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+
+        function resetPositions() {
+            puck.x = tableWidth / 2;
+            puck.y = tableHeight / 2;
+            puck.vx = 0;
+            puck.vy = 0;
+
+            paddleTop.x = tableWidth / 2;
+            paddleTop.y = tableHeight * 0.2;
+            paddleTop.targetX = paddleTop.x;
+            paddleTop.targetY = paddleTop.y;
+            paddleTop.lastX = paddleTop.x;
+            paddleTop.lastY = paddleTop.y;
+
+            paddleBottom.x = tableWidth / 2;
+            paddleBottom.y = tableHeight * 0.8;
+            paddleBottom.targetX = paddleBottom.x;
+            paddleBottom.targetY = paddleBottom.y;
+            paddleBottom.lastX = paddleBottom.x;
+            paddleBottom.lastY = paddleBottom.y;
+        }
+
+        function startGameMode(mode) {
+            gameMode = mode;
+            gameOver = false;
+            aiHitTimestamps = [];
+            if (fanfareInterval) clearInterval(fanfareInterval);
+            splashScreen.classList.add('hidden');
+            onlineScreen.classList.add('hidden');
+            winnerBanner.classList.remove('show');
+            canvas.classList.remove('flashing');
+            scoreboard.classList.remove('hidden');
+            scoreTop = 0;
+            scoreBottom = 0;
+
+            nameTopDisplay.textContent = player2Name;
+            nameBottomDisplay.textContent = player1Name;
+
+            updateScoreboards();
+            resizeCanvas();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function playAgain() {
+            if (fanfareInterval) clearInterval(fanfareInterval);
+            winnerBanner.classList.remove('show');
+            canvas.classList.remove('flashing');
+            scoreTop = 0;
+            scoreBottom = 0;
+            aiHitTimestamps = [];
+            updateScoreboards();
+            gameOver = false;
+            resetPositions();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function showOnlineMenu() {
+            splashScreen.classList.add('hidden');
+            onlineScreen.classList.remove('hidden');
+            hostingSection.classList.add('hidden');
+            onlineActions.classList.remove('hidden');
+            statusMsg.textContent = '';
+        }
+
+        function backToSplash() {
+            if (peer) {
+                peer.destroy();
+                peer = null;
+            }
+            if (fanfareInterval) clearInterval(fanfareInterval);
+            onlineScreen.classList.add('hidden');
+            winnerBanner.classList.remove('show');
+            canvas.classList.remove('flashing');
+            scoreboard.classList.add('hidden');
+            splashScreen.classList.remove('hidden');
+            gameMode = null;
+        }
+
+        function updateScoreboards() {
+            scoreTopDisplay.textContent = scoreTop;
+            scoreBottomDisplay.textContent = scoreBottom;
+        }
+
+        // --- PEERJS MULTIPLAYER LOGIC ---
+        function hostGame() {
+            statusMsg.textContent = 'Initializing connection...';
+            onlineActions.classList.add('hidden');
+            hostingSection.classList.remove('hidden');
+
+            peer = new Peer();
+            peer.on('open', (id) => {
+                codeDisplay.textContent = id.substring(0, 6).toUpperCase();
+                peer.customId = id;
+                statusMsg.textContent = 'Waiting for opponent...';
+            });
+
+            peer.on('connection', (connection) => {
+                conn = connection;
+                myRole = 'host';
+                setupConnectionEvents();
+                
+                // Send host name to client
+                conn.on('open', () => {
+                    conn.send({ type: 'name', name: player1Name });
+                });
+
+                startGameMode('online-host');
+            });
+
+            peer.on('error', (err) => {
+                statusMsg.textContent = 'Error: ' + err.type;
+            });
+        }
+
+        function joinGame() {
+            const codeInput = joinCodeInput.value.trim();
+            if (!codeInput) {
+                statusMsg.textContent = 'Please enter a room code!';
+                return;
+            }
+            statusMsg.textContent = 'Connecting to room...';
+
+            peer = new Peer();
+            peer.on('open', () => {
+                conn = peer.connect(codeInput);
+                myRole = 'client';
+                setupConnectionEvents();
+            });
+
+            peer.on('error', (err) => {
+                statusMsg.textContent = 'Connection failed. Check code.';
+            });
+        }
+
+        function setupConnectionEvents() {
+            conn.on('open', () => {
+                statusMsg.textContent = 'Connected! Starting game...';
+                // Send client name to host
+                conn.send({ type: 'name', name: player1Name });
+
+                setTimeout(() => {
+                    startGameMode(myRole === 'host' ? 'online-host' : 'online-client');
+                }, 500);
+            });
+
+            conn.on('data', (data) => {
+                if (data.type === 'name') {
+                    if (myRole === 'host') {
+                        player2Name = data.name;
+                        nameTopDisplay.textContent = player2Name;
+                    } else {
+                        player2Name = data.name;
+                        nameTopDisplay.textContent = player2Name;
+                    }
+                    return;
+                }
+
+                if (myRole === 'host') {
+                    paddleTop.targetX = data.x * tableWidth;
+                    paddleTop.targetY = data.y * (tableHeight / 2);
+                    if (data.puck) {
+                        puck.x = data.puck.x * tableWidth;
+                        puck.y = data.puck.y * tableHeight;
+                        puck.vx = data.puck.vx * scale;
+                        puck.vy = data.puck.vy * scale;
+                        scoreTop = data.scoreTop;
+                        scoreBottom = data.scoreBottom;
+                        updateScoreboards();
+                        if (data.gameOver && !gameOver) {
+                            triggerWin(data.winnerName);
+                        }
+                    }
+                } else {
+                    paddleTop.x = data.paddleTop.x * tableWidth;
+                    paddleTop.y = data.paddleTop.y * tableHeight;
+                    paddleBottom.x = data.paddleBottom.x * tableWidth;
+                    paddleBottom.y = data.paddleBottom.y * tableHeight;
+                    puck.x = data.puck.x * tableWidth;
+                    puck.y = data.puck.y * tableHeight;
+                    scoreTop = data.scoreTop;
+                    scoreBottom = data.scoreBottom;
+                    updateScoreboards();
+                    if (data.gameOver && !gameOver) {
+                        triggerWin(data.winnerName);
+                    }
+                }
+            });
+
+            conn.on('close', () => {
+                alert('Opponent disconnected.');
+                backToSplash();
+            });
+        }
+
+        // --- TOUCH & MOUSE CONTROLS ---
+        window.addEventListener('pointerdown', (e) => { updateTouchPos(e); });
+        window.addEventListener('pointermove', (e) => { updateTouchPos(e); });
+        window.addEventListener('pointerup', (e) => { delete touchMap[e.pointerId]; });
+
+        function updateTouchPos(e) {
+            if (gameOver) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            if (x < 0 || x > tableWidth || y < 0 || y > tableHeight) return;
+
+            touchMap[e.pointerId] = { x, y };
+
+            if (gameMode === '1p' || gameMode === '2p' || gameMode === 'online-host') {
+                for (let id in touchMap) {
+                    const t = touchMap[id];
+                    if (t.y > tableHeight / 2) {
+                        paddleBottom.targetX = t.x;
+                        paddleBottom.targetY = Math.max(t.y, tableHeight / 2 + paddleBottom.radius);
+                    }
+                }
+            }
+
+            if (gameMode === '2p') {
+                for (let id in touchMap) {
+                    const t = touchMap[id];
+                    if (t.y <= tableHeight / 2) {
+                        paddleTop.targetX = t.x;
+                        paddleTop.targetY = Math.min(t.y, tableHeight / 2 - paddleTop.radius);
+                    }
+                }
+            }
+
+            if (gameMode === 'online-client') {
+                for (let id in touchMap) {
+                    const t = touchMap[id];
+                    if (t.y <= tableHeight / 2) {
+                        paddleTop.targetX = t.x;
+                        paddleTop.targetY = Math.min(t.y, tableHeight / 2 - paddleTop.radius);
+                        
+                        if (conn && conn.open) {
+                            conn.send({
+                                x: paddleTop.targetX / tableWidth,
+                                y: paddleTop.targetY / (tableHeight / 2)
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- GAME UPDATE & PHYSICS ---
+        function update() {
+            if (gameOver) return;
+
+            // Track velocities of paddles for momentum transfer when hitting the puck
+            paddleBottom.lastX = paddleBottom.x;
+            paddleBottom.lastY = paddleBottom.y;
+            paddleBottom.x += (paddleBottom.targetX - paddleBottom.x) * 0.35;
+            paddleBottom.y += (paddleBottom.targetY - paddleBottom.y) * 0.35;
+            paddleBottom.vx = paddleBottom.x - paddleBottom.lastX;
+            paddleBottom.vy = paddleBottom.y - paddleBottom.lastY;
+
+            const bMinY = tableHeight / 2 + paddleBottom.radius;
+            const bMaxY = tableHeight - paddleBottom.radius - 10 * scale;
+            if (paddleBottom.y < bMinY) paddleBottom.y = bMinY;
+            if (paddleBottom.y > bMaxY) paddleBottom.y = bMaxY;
+            if (paddleBottom.x < paddleBottom.radius) paddleBottom.x = paddleBottom.radius;
+            if (paddleBottom.x > tableWidth - paddleBottom.radius) paddleBottom.x = tableWidth - paddleBottom.radius;
+
+            if (gameMode === '1p') {
+                // AI speed reduced by 50% (7.5 * 0.5 = 3.75) and interpolation factor halved (0.3 * 0.5 = 0.15)
+                let aiSpeed = 3.75 * scale;
+                let targetX = tableWidth / 2;
+                let targetY = tableHeight * 0.18;
+
+                // Robust AI logic: react actively whether the puck is in its half or coming toward it
+                if (puck.y < tableHeight * 0.75) {
+                    targetX = puck.x;
+                    if (puck.y < tableHeight / 2) {
+                        // Attack / clear puck when in AI territory
+                        targetY = Math.min(tableHeight * 0.42, Math.max(30 * scale, puck.y - 10 * scale));
+                    } else {
+                        // Anticipate incoming puck
+                        targetY = Math.min(tableHeight * 0.4, puck.y * 0.5);
+                    }
+                } else {
+                    // Return to home defensive position smoothly when puck is far down
+                    targetX = tableWidth / 2;
+                    targetY = tableHeight * 0.18;
+                }
+
+                paddleTop.lastX = paddleTop.x;
+                paddleTop.lastY = paddleTop.y;
+
+                if (paddleTop.x < targetX) paddleTop.x += Math.min(aiSpeed, targetX - paddleTop.x);
+                if (paddleTop.x > targetX) paddleTop.x -= Math.min(aiSpeed, paddleTop.x - targetX);
+                
+                paddleTop.y += (targetY - paddleTop.y) * 0.15;
+
+                paddleTop.vx = paddleTop.x - paddleTop.lastX;
+                paddleTop.vy = paddleTop.y - paddleTop.lastY;
+
+                if (paddleTop.x < paddleTop.radius) paddleTop.x = paddleTop.radius;
+                if (paddleTop.x > tableWidth - paddleTop.radius) paddleTop.x = tableWidth - paddleTop.radius;
+                if (paddleTop.y < paddleTop.radius + 10 * scale) paddleTop.y = paddleTop.radius + 10 * scale;
+                if (paddleTop.y > tableHeight / 2 - paddleTop.radius) paddleTop.y = tableHeight / 2 - paddleTop.radius;
+
+            } else if (gameMode === '2p' || gameMode === 'online-host') {
+                paddleTop.lastX = paddleTop.x;
+                paddleTop.lastY = paddleTop.y;
+                paddleTop.x += (paddleTop.targetX - paddleTop.x) * 0.35;
+                paddleTop.y += (paddleTop.targetY - paddleTop.y) * 0.35;
+                paddleTop.vx = paddleTop.x - paddleTop.lastX;
+                paddleTop.vy = paddleTop.y - paddleTop.lastY;
+
+                const tMinY = paddleTop.radius + 10 * scale;
+                const tMaxY = tableHeight / 2 - paddleTop.radius;
+                if (paddleTop.y < tMinY) paddleTop.y = tMinY;
+                if (paddleTop.y > tMaxY) paddleTop.y = tMaxY;
+                if (paddleTop.x < paddleTop.radius) paddleTop.x = paddleTop.radius;
+                if (paddleTop.x > tableWidth - paddleTop.radius) paddleTop.x = tableWidth - paddleTop.radius;
+            }
+
+            if (gameMode === '1p' || gameMode === '2p' || gameMode === 'online-host') {
+                puck.x += puck.vx;
+                puck.y += puck.vy;
+                puck.vx *= puck.friction;
+                puck.vy *= puck.friction;
+
+                // Wall collisions (Left/Right) with tap sound
+                if (puck.x - puck.radius < 10 * scale) {
+                    puck.x = 10 * scale + puck.radius;
+                    puck.vx *= -1;
+                    playTapSound(300, 'sine', 0.04, 0.2);
+                }
+                if (puck.x + puck.radius > tableWidth - 10 * scale) {
+                    puck.x = tableWidth - 10 * scale - puck.radius;
+                    puck.vx *= -1;
+                    playTapSound(300, 'sine', 0.04, 0.2);
+                }
+
+                const goalWidth = 140 * scale;
+                const goalLeft = (tableWidth - goalWidth) / 2;
+                const goalRight = goalLeft + goalWidth;
+
+                // Top Goal (Bottom scores)
+                if (puck.y - puck.radius < 10 * scale) {
+                    if (puck.x > goalLeft && puck.x < goalRight) {
+                        scoreBottom++;
+                        playTapSound(600, 'triangle', 0.15, 0.4);
+                        updateScoreboards();
+                        checkWinCondition();
+                        if (!gameOver) resetPositions();
+                    } else {
+                        puck.y = 10 * scale + puck.radius;
+                        puck.vy *= -1;
+                        playTapSound(300, 'sine', 0.04, 0.2);
+                    }
+                }
+
+                // Bottom Goal (Top scores)
+                if (puck.y + puck.radius > tableHeight - 10 * scale) {
+                    if (puck.x > goalLeft && puck.x < goalRight) {
+                        scoreTop++;
+                        playTapSound(600, 'triangle', 0.15, 0.4);
+                        updateScoreboards();
+                        checkWinCondition();
+                        if (!gameOver) resetPositions();
+                    } else {
+                        puck.y = tableHeight - 10 * scale - puck.radius;
+                        puck.vy *= -1;
+                        playTapSound(300, 'sine', 0.04, 0.2);
+                    }
+                }
+
+                checkPaddleCollision(paddleTop, true);
+                checkPaddleCollision(paddleBottom, false);
+
+                if (gameMode === 'online-host' && conn && conn.open) {
+                    conn.send({
+                        paddleTop: { x: paddleTop.x / tableWidth, y: paddleTop.y / tableHeight },
+                        paddleBottom: { x: paddleBottom.x / tableWidth, y: paddleBottom.y / tableHeight },
+                        puck: { x: puck.x / tableWidth, y: puck.y / tableHeight },
+                        scoreTop: scoreTop,
+                        scoreBottom: scoreBottom,
+                        gameOver: gameOver,
+                        winnerName: winnerText.textContent
+                    });
+                }
+            }
+        }
+
+        function checkWinCondition() {
+            if (scoreBottom >= 6) {
+                triggerWin(`${player1Name} WINS!`);
+            } else if (scoreTop >= 6) {
+                triggerWin(`${player2Name} WINS!`);
+            }
+        }
+
+        function triggerWin(message) {
+            gameOver = true;
+            winnerText.textContent = message;
+            winnerBanner.classList.add('show');
+            canvas.classList.add('flashing');
+            playFanfare();
+        }
+
+        function checkPaddleCollision(paddle, isTopPaddle) {
+            const dx = puck.x - paddle.x;
+            const dy = puck.y - paddle.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const minDist = puck.radius + paddle.radius;
+
+            if (dist < minDist) {
+                // If it's the AI paddle in 1p mode, check hit frequency spam (more than 5 times in 1 second)
+                if (gameMode === '1p' && isTopPaddle) {
+                    const now = Date.now();
+                    // Remove hits older than 1000ms (1 second)
+                    aiHitTimestamps = aiHitTimestamps.filter(timestamp => now - timestamp < 1000);
+                    aiHitTimestamps.push(now);
+
+                    if (aiHitTimestamps.length > 5) {
+                        // Reset AI paddle back to start position
+                        paddle.x = tableWidth / 2;
+                        paddle.y = tableHeight * 0.2;
+                        paddle.targetX = paddle.x;
+                        paddle.targetY = paddle.y;
+                        paddle.vx = 0;
+                        paddle.vy = 0;
+                        aiHitTimestamps = [];
+                        return; // Skip bounce physics on penalty reset
+                    }
+                }
+
+                const angle = Math.atan2(dy, dx);
+                const overlap = minDist - dist;
+
+                puck.x += Math.cos(angle) * overlap;
+                puck.y += Math.sin(angle) * overlap;
+
+                const normalX = Math.cos(angle);
+                const normalY = Math.sin(angle);
+
+                const paddleSpeed = Math.sqrt(paddle.vx * paddle.vx + paddle.vy * paddle.vy);
+                const baseBounce = Math.max(Math.sqrt(puck.vx * puck.vx + puck.vy * puck.vy), 6 * scale);
+
+                const hitPower = baseBounce + paddleSpeed * 1.5;
+
+                puck.vx = normalX * hitPower + paddle.vx * 0.8;
+                puck.vy = normalY * hitPower + paddle.vy * 0.8;
+
+                playTapSound(Math.min(450 + paddleSpeed * 20, 800), 'sine', 0.08, Math.min(0.2 + paddleSpeed * 0.05, 0.8));
+
+                const currentSpeed = Math.sqrt(puck.vx * puck.vx + puck.vy * puck.vy);
+                if (currentSpeed > puck.maxSpeed * scale) {
+                    puck.vx = (puck.vx / currentSpeed) * puck.maxSpeed * scale;
+                    puck.vy = (puck.vy / currentSpeed) * puck.maxSpeed * scale;
+                }
+            }
+        }
+
+        // --- RENDER TABLE & GRAPHICS ---
+        function draw() {
+            ctx.clearRect(0, 0, tableWidth, tableHeight);
+
+            const border = 10 * scale;
+
+            // White table surface
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, tableWidth, tableHeight);
+
+            // Outer border walls
+            ctx.strokeStyle = '#00f3ff';
+            ctx.lineWidth = border;
+            ctx.strokeRect(border / 2, border / 2, tableWidth - border, tableHeight - border);
+
+            // Red Center Line & Circle
+            ctx.strokeStyle = '#ff0055';
+            ctx.lineWidth = 3 * scale;
+
+            ctx.beginPath();
+            ctx.moveTo(border, tableHeight / 2);
+            ctx.lineTo(tableWidth - border, tableHeight / 2);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(tableWidth / 2, tableHeight / 2, 50 * scale, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.fillStyle = '#ff0055';
+            ctx.beginPath();
+            ctx.arc(tableWidth / 2, tableHeight / 2, 6 * scale, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Goal Arcs / Creases
+            const goalWidth = 140 * scale;
+            const goalRadius = 50 * scale;
+
+            ctx.beginPath();
+            ctx.arc(tableWidth / 2, border, goalRadius, 0, Math.PI, false);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(tableWidth / 2, tableHeight - border, goalRadius, Math.PI, 0, false);
+            ctx.stroke();
+
+            // Goal Openings
+            ctx.fillStyle = '#0d0f18';
+            ctx.fillRect((tableWidth - goalWidth) / 2, 0, goalWidth, border);
+            ctx.fillRect((tableWidth - goalWidth) / 2, tableHeight - border, goalWidth, border);
+
+            // Yellow/Orange Disc in Center (Puck)
+            ctx.shadowColor = '#ffbb00';
+            ctx.shadowBlur = 15;
+            ctx.fillStyle = '#ffcc00';
+            ctx.beginPath();
+            ctx.arc(puck.x, puck.y, puck.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = '#ffee66';
+            ctx.lineWidth = 3 * scale;
+            ctx.beginPath();
+            ctx.arc(puck.x, puck.y, puck.radius * 0.6, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+
+            // Red Round Paddles
+            drawPaddle(paddleTop, '#ff0055');
+            drawPaddle(paddleBottom, '#ff0055');
+        }
+
+        function drawPaddle(paddle, color) {
+            ctx.shadowColor = color;
+            ctx.shadowBlur = 15;
+
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(paddle.x, paddle.y, paddle.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 4 * scale;
+            ctx.beginPath();
+            ctx.arc(paddle.x, paddle.y, paddle.radius * 0.7, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(paddle.x, paddle.y, paddle.radius * 0.3, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.shadowBlur = 0;
+        }
+
+        // --- MAIN GAME LOOP ---
+        function gameLoop() {
+            if (!gameMode) return;
+            update();
+            draw();
+
+            if (!gameOver) {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+    </script>
+</body>
+</html>
